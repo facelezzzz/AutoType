@@ -6,13 +6,14 @@
 
     <depends>com.intellij.modules.platform</depends>
 
-    <resource-bundle>messages.MyBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="com.github.facelezzzz.autotype.toolWindow.MyToolWindowFactory" id="MyToolWindow"/>
-    </extensions>
 
-    <applicationListeners>
-        <listener class="com.github.facelezzzz.autotype.listeners.MyApplicationActivationListener" topic="com.intellij.openapi.application.ApplicationActivationListener"/>
-    </applicationListeners>
+        <editorFactoryListener implementation="com.github.facelezzzz.autotype.listeners.AutoTypeEditorCreatedListener"/>
+
+        <applicationService
+                serviceInterface="com.github.facelezzzz.autotype.completion.AutoTypeCompletionService"
+                serviceImplementation="com.github.facelezzzz.autotype.completion.AutoTypeCompletionServiceImpl"/>
+
+    </extensions>
 </idea-plugin>
