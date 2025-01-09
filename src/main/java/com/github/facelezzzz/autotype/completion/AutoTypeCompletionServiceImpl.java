@@ -147,22 +147,22 @@ public class AutoTypeCompletionServiceImpl implements AutoTypeCompletionService 
         InlayModel inlayModel = editor.getInlayModel();
         CaretModel caretModel = editor.getCaretModel();
         LogicalPosition logicalPosition = caretModel.getLogicalPosition();
-        int caretOffset = caretModel.getOffset();
+        int offset = editor.getDocument().getLineEndOffset(logicalPosition.line);
         log.info(String.format("[AutoType] on completion response:%s", completeResponse.getContent()));
         switch (completeResponse.getCompleteType()) {
             case LINE -> {
                 SingleLineEditorCustomElementRenderer renderer = new SingleLineEditorCustomElementRenderer(editor, completeResponse.getContent());
                 if (caretInline(editor)) {
-                    Inlay<?> inlay = inlayModel.addInlineElement(caretOffset - 1, true, renderer);
+                    Inlay<?> inlay = inlayModel.addInlineElement(offset, true, renderer);
                     inlays.add(inlay);
                 } else {
-                    Inlay<?> inlay = inlayModel.addAfterLineEndElement(caretOffset - 1, true, renderer);
+                    Inlay<?> inlay = inlayModel.addAfterLineEndElement(offset, true, renderer);
                     inlays.add(inlay);
                 }
             }
             case BLOCK -> {
                 MultiLineEditorCustomElementRenderer renderer = new MultiLineEditorCustomElementRenderer(editor, completeResponse, logicalPosition);
-                Inlay<?> inlay = inlayModel.addBlockElement(caretOffset - 1, true, false, Integer.MAX_VALUE, renderer);
+                Inlay<?> inlay = inlayModel.addBlockElement(offset, true, false, Integer.MAX_VALUE, renderer);
                 inlays.add(inlay);
             }
             default -> {
