@@ -1,5 +1,6 @@
 package com.github.facelezzzz.autotype.completion;
 
+import com.github.facelezzzz.autotype.settings.AutoTypeSetting;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableMap;
 import com.google.gson.Gson;
@@ -23,6 +24,7 @@ import org.apache.commons.lang3.StringUtils;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 public class AutoTypeCompletionServiceImpl implements AutoTypeCompletionService {
@@ -84,20 +86,26 @@ public class AutoTypeCompletionServiceImpl implements AutoTypeCompletionService 
     @Override
     public void showComplete(Editor editor) {
         clearInlays(editor);
+        AutoTypeSetting setting = AutoTypeSetting.getInstance();
+        if (!setting.isOllamaConfigured()) {
+            log.warn("[AutoType] Ollama is not config...");
+            return;
+        }
         if (!shouldComplete(editor)) {
             return;
         }
+        AutoTypeSetting.State settingState = setting.getState();
+        Objects.requireNonNull(settingState);
         EditorSnapshot editorSnapshot = EditorSnapshot.getEditorSnapshot(editor);
-        OllamaCompleteRequest ollamaCompleteRequest = genOpenaiChatRequest(editor);
+        OllamaCompleteRequest ollamaCompleteRequest = genOpenaiChatRequest(editor, settingState);
         scheduleComplete(() -> {
-            CompleteResponse completeResponse = requestComplete(ollamaCompleteRequest);
+            CompleteResponse completeResponse = requestComplete(ollamaCompleteRequest, settingState.ollamaApi);
             log.info(String.format("[AutoType]Completion:\n%s", completeResponse.getContent()));
             if (StringUtils.isBlank(completeResponse.getContent())) {
                 return;
             }
             ApplicationManager.getApplication().invokeLater(() -> {
                 WriteAction.run(() -> {
-                    log.info(String.format("[AutoType] make completion:%s", completeResponse.getContent()));
                     if (editorUnchanged(editor, editorSnapshot)) {
                         onCompleteResponse(editor, completeResponse);
                     }
@@ -158,11 +166,11 @@ public class AutoTypeCompletionServiceImpl implements AutoTypeCompletionService 
     }
 
 
-    private CompleteResponse requestComplete(OllamaCompleteRequest request) {
+    private CompleteResponse requestComplete(OllamaCompleteRequest request, String ollamaApi) {
         String requestBody = gson.toJson(request);
         log.info(String.format("[AutoType][OllamaCompleteRequest] request:%s", requestBody));
         try(Response response = okhttpClient.newCall(new Request.Builder()
-                .url("http://localhost:11434/api/generate")
+                .url(ollamaApi)
                 .post(RequestBody.create(requestBody, MediaType.parse("application/json")))
                 .build()).execute()) {
             if (response.isSuccessful()) {
@@ -205,13 +213,12 @@ public class AutoTypeCompletionServiceImpl implements AutoTypeCompletionService 
         }
     }
 
-    private OllamaCompleteRequest genOpenaiChatRequest(Editor editor) {
+    private OllamaCompleteRequest genOpenaiChatRequest(Editor editor, AutoTypeSetting.State settingState) {
         //TODO 根据当前内容生成提示
-        String modelName = "qwen2.5-coder:3b-base";
         String prompt = genPrompt(editor);
         log.info(String.format("[AutoType] prompt:%s", prompt));
         return OllamaCompleteRequest.builder()
-                .model(modelName)
+                .model(settingState.ollamaModelName)
                 .prompt(prompt)
                 .options(ImmutableMap.of("temperature", 0))
                 .stream(false)

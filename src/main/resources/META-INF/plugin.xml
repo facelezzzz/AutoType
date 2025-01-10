@@ -9,11 +9,19 @@
 
     <extensions defaultExtensionNs="com.intellij">
 
+        <applicationConfigurable
+                parentId="tools"
+                instance="com.github.facelezzzz.autotype.settings.AutoTypeSettingsConfigurable"
+                id="com.github.facelezzzz.autotype.settings.AutoTypeSettingsConfigurable"
+                displayName="AutoType"/>
+
         <editorFactoryListener implementation="com.github.facelezzzz.autotype.listeners.AutoTypeEditorCreatedListener"/>
 
         <applicationService
                 serviceInterface="com.github.facelezzzz.autotype.completion.AutoTypeCompletionService"
                 serviceImplementation="com.github.facelezzzz.autotype.completion.AutoTypeCompletionServiceImpl"/>
 
+        <applicationService serviceImplementation="com.github.facelezzzz.autotype.settings.AutoTypeSetting"/>
     </extensions>
+
 </idea-plugin>
