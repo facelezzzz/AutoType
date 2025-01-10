@@ -5,10 +5,8 @@ import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.editor.event.CaretEvent;
 import com.intellij.openapi.editor.event.CaretListener;
 import com.intellij.openapi.project.Project;
-import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 
-@Slf4j
 public class AutoTypeCaretListener implements CaretListener {
 
     @Override

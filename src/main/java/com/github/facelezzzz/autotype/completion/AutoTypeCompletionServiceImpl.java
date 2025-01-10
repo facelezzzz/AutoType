@@ -1,6 +1,7 @@
 package com.github.facelezzzz.autotype.completion;
 
 import com.google.common.base.Splitter;
+import com.google.common.collect.ImmutableMap;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.intellij.openapi.Disposable;
@@ -212,6 +213,7 @@ public class AutoTypeCompletionServiceImpl implements AutoTypeCompletionService 
         return OllamaCompleteRequest.builder()
                 .model(modelName)
                 .prompt(prompt)
+                .options(ImmutableMap.of("temperature", 0))
                 .stream(false)
                 .build();
     }
