@@ -7,22 +7,22 @@ import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.WriteAction;
 import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.openapi.editor.*;
-import com.intellij.openapi.editor.colors.EditorColorsScheme;
-import com.intellij.openapi.editor.colors.EditorFontType;
+import com.intellij.openapi.editor.CaretModel;
+import com.intellij.openapi.editor.Editor;
+import com.intellij.openapi.editor.Inlay;
+import com.intellij.openapi.editor.InlayModel;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.util.Alarm;
-import com.intellij.util.ui.UIUtil;
 import okhttp3.*;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
 
-import java.awt.*;
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 public class AutoTypeCompletionServiceImpl implements AutoTypeCompletionService {
 
@@ -144,26 +144,25 @@ public class AutoTypeCompletionServiceImpl implements AutoTypeCompletionService 
         }
         inlays.forEach(Disposable::dispose);
         inlays.clear();
+
         InlayModel inlayModel = editor.getInlayModel();
         CaretModel caretModel = editor.getCaretModel();
-        LogicalPosition logicalPosition = caretModel.getLogicalPosition();
-        int offset = editor.getDocument().getLineEndOffset(logicalPosition.line);
-        log.info(String.format("[AutoType] on completion response:%s", completeResponse.getContent()));
+        int offset = caretModel.getOffset();
+        log.info(String.format("[AutoType]on completion response:%s", completeResponse.getContent()));
         switch (completeResponse.getCompleteType()) {
             case LINE -> {
-                SingleLineEditorCustomElementRenderer renderer = new SingleLineEditorCustomElementRenderer(editor, completeResponse.getContent());
-                if (caretInline(editor)) {
-                    Inlay<?> inlay = inlayModel.addInlineElement(offset, true, renderer);
-                    inlays.add(inlay);
-                } else {
-                    Inlay<?> inlay = inlayModel.addAfterLineEndElement(offset, true, renderer);
-                    inlays.add(inlay);
-                }
+                SingleLineEditorCustomElementRenderer lineRenderer = new SingleLineEditorCustomElementRenderer(completeResponse.getContent());
+                inlays.add(inlayModel.addInlineElement(offset, true, lineRenderer));
             }
             case BLOCK -> {
-                MultiLineEditorCustomElementRenderer renderer = new MultiLineEditorCustomElementRenderer(editor, completeResponse, logicalPosition);
-                Inlay<?> inlay = inlayModel.addBlockElement(offset, true, false, Integer.MAX_VALUE, renderer);
-                inlays.add(inlay);
+                //first line
+                SingleLineEditorCustomElementRenderer firstLineRenderer = new SingleLineEditorCustomElementRenderer(completeResponse.getContent());
+                inlays.add(inlayModel.addInlineElement(offset, true, firstLineRenderer));
+
+                //remain lines
+                List<String> completions = completeResponse.getCompletions();
+                MultiLineEditorCustomElementRenderer renderer = new MultiLineEditorCustomElementRenderer(completions.subList(1, completions.size()));
+                inlays.add(inlayModel.addBlockElement(offset, true, false, Integer.MAX_VALUE, renderer));
             }
             default -> {
             }
