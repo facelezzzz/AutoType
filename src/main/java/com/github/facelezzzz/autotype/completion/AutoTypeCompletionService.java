@@ -12,4 +12,6 @@ public interface AutoTypeCompletionService extends Disposable {
 
     void showComplete(Editor editor);
 
+    void clearInlays(Editor editor);
+
 }

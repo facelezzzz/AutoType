@@ -21,6 +21,7 @@ public class AutoTypeEditorCreatedListener implements EditorFactoryListener {
             Disposable editorDisposable = Disposer.newDisposable(AUTO_TYPE_EDITOR_LISTENER_DISPOSABLE_DEBUG_NAME);
             EditorUtil.disposeWithEditor(editor, editorDisposable);
             editor.getCaretModel().addCaretListener(new AutoTypeCaretListener(), editorDisposable);
+            editor.getDocument().addDocumentListener(new AutoTypeDocumentListener(editor), editorDisposable);
         }
     }
 

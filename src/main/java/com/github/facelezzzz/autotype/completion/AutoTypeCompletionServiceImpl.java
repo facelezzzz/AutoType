@@ -109,7 +109,7 @@ public class AutoTypeCompletionServiceImpl implements AutoTypeCompletionService 
         return oldEditorSnapshot.equals(EditorSnapshot.getEditorSnapshot(editor));
     }
 
-    private void clearInlays(Editor editor) {
+    public void clearInlays(Editor editor) {
         List<Inlay<?>> inlays = INLAY_LIST_KEY.get(editor);
         if (ObjectUtils.isNotEmpty(inlays)) {
             inlays.forEach(Disposable::dispose);
