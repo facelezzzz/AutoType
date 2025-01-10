@@ -90,28 +90,10 @@ public class AutoTypeCompletionServiceImpl implements AutoTypeCompletionService 
         OllamaCompleteRequest ollamaCompleteRequest = genOpenaiChatRequest(editor);
         scheduleComplete(() -> {
             CompleteResponse completeResponse = requestComplete(ollamaCompleteRequest);
-//            CompleteResponse completeResponse = new CompleteResponse() {
-//                @Override
-//                public CompleteType getCompleteType() {
-//                    return CompleteType.BLOCK;
-//                }
-//
-//                @Override
-//                public List<String> getCompletions() {
-//                    return List.of("abc");
-//                }
-//
-//                @Override
-//                public String getContent() {
-//                    return "abc";
-//                }
-//            };
             log.info(String.format("[AutoType]Completion:\n%s", completeResponse.getContent()));
             if (StringUtils.isBlank(completeResponse.getContent())) {
                 return;
             }
-            LAST_COMPLETE_RESPONSE_KEY.set(editor, completeResponse);
-            log.info(String.format("[AutoType] submit completion task:%s", completeResponse.getContent()));
             ApplicationManager.getApplication().invokeLater(() -> {
                 WriteAction.run(() -> {
                     log.info(String.format("[AutoType] make completion:%s", completeResponse.getContent()));
@@ -135,16 +117,16 @@ public class AutoTypeCompletionServiceImpl implements AutoTypeCompletionService 
         }
     }
 
+    private void initInlayListKeyIfNotIn(Editor editor) {
+        if (!INLAY_LIST_KEY.isIn(editor)) {
+            INLAY_LIST_KEY.set(editor, new ArrayList<>());
+        }
+    }
+
     private void onCompleteResponse(Editor editor,
                                     CompleteResponse completeResponse) {
+        initInlayListKeyIfNotIn(editor);
         List<Inlay<?>> inlays = INLAY_LIST_KEY.get(editor);
-        if (inlays == null) {
-            inlays = new ArrayList<>();
-            INLAY_LIST_KEY.set(editor, inlays);
-        }
-        inlays.forEach(Disposable::dispose);
-        inlays.clear();
-
         InlayModel inlayModel = editor.getInlayModel();
         CaretModel caretModel = editor.getCaretModel();
         int offset = caretModel.getOffset();
@@ -155,12 +137,12 @@ public class AutoTypeCompletionServiceImpl implements AutoTypeCompletionService 
                 inlays.add(inlayModel.addInlineElement(offset, true, lineRenderer));
             }
             case BLOCK -> {
+                List<String> completions = completeResponse.getCompletions();
                 //first line
-                SingleLineEditorCustomElementRenderer firstLineRenderer = new SingleLineEditorCustomElementRenderer(completeResponse.getContent());
+                SingleLineEditorCustomElementRenderer firstLineRenderer = new SingleLineEditorCustomElementRenderer(completions.get(0));
                 inlays.add(inlayModel.addInlineElement(offset, true, firstLineRenderer));
 
                 //remain lines
-                List<String> completions = completeResponse.getCompletions();
                 MultiLineEditorCustomElementRenderer renderer = new MultiLineEditorCustomElementRenderer(completions.subList(1, completions.size()));
                 inlays.add(inlayModel.addBlockElement(offset, true, false, Integer.MAX_VALUE, renderer));
             }
