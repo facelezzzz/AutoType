@@ -1,7 +1,6 @@
 package com.github.facelezzzz.autotype.completion;
 
 import com.github.facelezzzz.autotype.settings.AutoTypeSetting;
-import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableMap;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -20,6 +19,7 @@ import okhttp3.*;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -34,8 +34,6 @@ public class AutoTypeCompletionServiceImpl implements AutoTypeCompletionService 
     private final Alarm completeRequestAlarm = new Alarm(Alarm.ThreadToUse.POOLED_THREAD, this);
 
     private final Object completeRequestAlarmLock = new Object();
-
-    private static final Key<CompleteResponse> LAST_COMPLETE_RESPONSE_KEY = Key.create("last complete response");
 
     private static final Key<List<Inlay<?>>> INLAY_LIST_KEY = Key.create("inlay list");
 
@@ -97,9 +95,9 @@ public class AutoTypeCompletionServiceImpl implements AutoTypeCompletionService 
         AutoTypeSetting.State settingState = setting.getState();
         Objects.requireNonNull(settingState);
         EditorSnapshot editorSnapshot = EditorSnapshot.getEditorSnapshot(editor);
-        OllamaCompleteRequest ollamaCompleteRequest = genOpenaiChatRequest(editor, settingState);
+        CompletePrompt prompt = genPrompt(editor);
         scheduleComplete(() -> {
-            CompleteResponse completeResponse = requestComplete(ollamaCompleteRequest, settingState.ollamaApi);
+            CompleteResponse completeResponse = getCompleteResponse(prompt, settingState);
             log.info(String.format("[AutoType]Completion:\n%s", completeResponse.getContent()));
             if (StringUtils.isBlank(completeResponse.getContent())) {
                 return;
@@ -112,6 +110,19 @@ public class AutoTypeCompletionServiceImpl implements AutoTypeCompletionService 
                 });
             });
         }, true);
+    }
+
+    private @NotNull CompleteResponse getCompleteResponse(CompletePrompt prompt, AutoTypeSetting.State settingState) {
+        AutoTypeCompletionCache completionCache = AutoTypeCompletionCache.getInstance();
+        CompleteResponse cacheCompleteResponse = completionCache.get(prompt);
+        if (cacheCompleteResponse != null) {
+            log.info(String.format("[AutoType] Hit cache completion:\n%s", cacheCompleteResponse.getContent()));
+            return cacheCompleteResponse;
+        }
+        CompleteRequest completeRequest = getCompleteRequest(prompt, settingState);
+        CompleteResponse completeResponse = requestComplete(completeRequest, settingState.ollamaApi);
+        completionCache.put(prompt, completeResponse);
+        return completeResponse;
     }
 
     private boolean editorUnchanged(Editor editor, EditorSnapshot oldEditorSnapshot) {
@@ -160,13 +171,7 @@ public class AutoTypeCompletionServiceImpl implements AutoTypeCompletionService 
         }
     }
 
-    private boolean caretInline(Editor editor) {
-        CaretModel caretModel = editor.getCaretModel();
-        return caretModel.getOffset() < editor.getDocument().getLineEndOffset(caretModel.getLogicalPosition().line);
-    }
-
-
-    private CompleteResponse requestComplete(OllamaCompleteRequest request, String ollamaApi) {
+    private CompleteResponse requestComplete(CompleteRequest request, String ollamaApi) {
         String requestBody = gson.toJson(request);
         log.info(String.format("[AutoType][OllamaCompleteRequest] request:%s", requestBody));
         try(Response response = okhttpClient.newCall(new Request.Builder()
@@ -179,25 +184,7 @@ public class AutoTypeCompletionServiceImpl implements AutoTypeCompletionService 
                     String responseStr = responseBody.string();
                     log.info(String.format("[AutoType][OllamaCompleteResponse] response:%s", responseStr));
                     OllamaResponse ollamaResponse = gson.fromJson(responseStr, OllamaResponse.class);
-                    List<String> completions = Splitter.on("\n").omitEmptyStrings().splitToList(ollamaResponse.getResponse());
-                    CompleteResponse.CompleteType completeType = completions.size() > 1 ?
-                            CompleteResponse.CompleteType.BLOCK : CompleteResponse.CompleteType.LINE;
-                    return new CompleteResponse() {
-                        @Override
-                        public CompleteType getCompleteType() {
-                            return completeType;
-                        }
-
-                        @Override
-                        public List<String> getCompletions() {
-                            return completions;
-                        }
-
-                        @Override
-                        public String getContent() {
-                            return ollamaResponse.getResponse();
-                        }
-                    };
+                    return AutpTypeCompleteResponse.build(ollamaResponse.getResponse());
                 }
             }
         } catch (IOException e) {
@@ -209,23 +196,22 @@ public class AutoTypeCompletionServiceImpl implements AutoTypeCompletionService 
     private void scheduleComplete(Runnable runnable, boolean debounce) {
         synchronized (completeRequestAlarmLock) {
             this.completeRequestAlarm.cancelAllRequests();
-            this.completeRequestAlarm.addRequest(runnable, debounce ? 500 : 0);
+            this.completeRequestAlarm.addRequest(runnable, debounce ? 200 : 0);
         }
     }
 
-    private OllamaCompleteRequest genOpenaiChatRequest(Editor editor, AutoTypeSetting.State settingState) {
+    private OllamaCompleteRequest getCompleteRequest(CompletePrompt prompt, AutoTypeSetting.State settingState) {
         //TODO 根据当前内容生成提示
-        String prompt = genPrompt(editor);
         log.info(String.format("[AutoType] prompt:%s", prompt));
         return OllamaCompleteRequest.builder()
                 .model(settingState.ollamaModelName)
-                .prompt(prompt)
+                .prompt(prompt.getPrompt())
                 .options(ImmutableMap.of("temperature", 0))
                 .stream(false)
                 .build();
     }
 
-    private String genPrompt(Editor editor) {
+    private CompletePrompt genPrompt(Editor editor) {
         CaretModel caretModel = editor.getCaretModel();
         int caretModelOffset = caretModel.getOffset();
 
@@ -234,13 +220,24 @@ public class AutoTypeCompletionServiceImpl implements AutoTypeCompletionService 
 
         String prefix = editor.getDocument().getText(new TextRange(startOffset, caretModelOffset));
         String suffix = editor.getDocument().getText(new TextRange(caretModelOffset, endOffset));
+
+        int lineStartOffset = editor.getDocument().getLineStartOffset(caretModel.getLogicalPosition().line);
+        int lineEndOffset = editor.getDocument().getLineEndOffset(caretModel.getLogicalPosition().line);
+
+        String currentLine = editor.getDocument().getText(new TextRange(lineStartOffset, lineEndOffset));
         //TODO 上下文级别的提示
         String prompt = "<|fim_prefix|>" +
                 prefix +
                 "<|fim_suffix|>" +
                 suffix +
                 "<|fim_middle|>";
-        return prompt;
+
+        return CompletePrompt.builder()
+                .prefix(prefix)
+                .suffix(suffix)
+                .prompt(prompt)
+                .currentLine(currentLine)
+                .build();
     }
 
     @Override

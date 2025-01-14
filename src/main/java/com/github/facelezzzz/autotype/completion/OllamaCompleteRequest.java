@@ -7,7 +7,7 @@ import java.util.Map;
 
 @Builder
 @Getter
-public class OllamaCompleteRequest {
+public class OllamaCompleteRequest implements CompleteRequest {
     private String model;
     private String prompt;
     private Map<String, Object> options;

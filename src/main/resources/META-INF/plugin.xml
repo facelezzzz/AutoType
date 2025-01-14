@@ -21,6 +21,10 @@
                 serviceInterface="com.github.facelezzzz.autotype.completion.AutoTypeCompletionService"
                 serviceImplementation="com.github.facelezzzz.autotype.completion.AutoTypeCompletionServiceImpl"/>
 
+        <applicationService
+                serviceInterface="com.github.facelezzzz.autotype.completion.AutoTypeCompletionCache"
+                serviceImplementation="com.github.facelezzzz.autotype.completion.AutoTypeCompletionCacheImpl"/>
+
         <applicationService serviceImplementation="com.github.facelezzzz.autotype.settings.AutoTypeSetting"/>
     </extensions>
 

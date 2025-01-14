@@ -37,6 +37,8 @@ dependencies {
     testAnnotationProcessor("org.projectlombok:lombok:1.18.36")
     implementation("com.google.code.gson:gson:2.11.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("org.apache.commons:commons-collections4:4.4")
+
 
     testImplementation(libs.junit)
 
