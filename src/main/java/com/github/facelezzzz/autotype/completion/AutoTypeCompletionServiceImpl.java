@@ -96,32 +96,39 @@ public class AutoTypeCompletionServiceImpl implements AutoTypeCompletionService 
         Objects.requireNonNull(settingState);
         EditorSnapshot editorSnapshot = EditorSnapshot.getEditorSnapshot(editor);
         CompletePrompt prompt = genPrompt(editor);
-        scheduleComplete(() -> {
-            CompleteResponse completeResponse = getCompleteResponse(prompt, settingState);
-            log.info(String.format("[AutoType]Completion:\n%s", completeResponse.getContent()));
-            if (StringUtils.isBlank(completeResponse.getContent())) {
+        CompleteResponse cachedCompleteResponse = getCachedCompleteResponse(prompt);
+        if (cachedCompleteResponse != null) {
+            log.info(String.format("[AutoType] Hit cache completion:\n%s", cachedCompleteResponse.getContent()));
+            if (StringUtils.isBlank(cachedCompleteResponse.getContent())) {
                 return;
             }
-            ApplicationManager.getApplication().invokeLater(() -> {
-                WriteAction.run(() -> {
-                    if (editorUnchanged(editor, editorSnapshot)) {
-                        onCompleteResponse(editor, completeResponse);
-                    }
+            onCompleteResponse(editor, cachedCompleteResponse);
+        } else {
+            scheduleComplete(() -> {
+                CompleteResponse completeResponse = requestComplete(prompt, settingState);
+                log.info(String.format("[AutoType]Completion:\n%s", completeResponse.getContent()));
+                if (StringUtils.isBlank(completeResponse.getContent())) {
+                    return;
+                }
+                ApplicationManager.getApplication().invokeLater(() -> {
+                    WriteAction.run(() -> {
+                        if (editorUnchanged(editor, editorSnapshot)) {
+                            onCompleteResponse(editor, completeResponse);
+                        }
+                    });
                 });
-            });
-        }, true);
+            }, true);
+        }
     }
 
-    private @NotNull CompleteResponse getCompleteResponse(CompletePrompt prompt, AutoTypeSetting.State settingState) {
-        AutoTypeCompletionCache completionCache = AutoTypeCompletionCache.getInstance();
-        CompleteResponse cacheCompleteResponse = completionCache.get(prompt);
-        if (cacheCompleteResponse != null) {
-            log.info(String.format("[AutoType] Hit cache completion:\n%s", cacheCompleteResponse.getContent()));
-            return cacheCompleteResponse;
-        }
+    private static CompleteResponse getCachedCompleteResponse(CompletePrompt prompt) {
+        return AutoTypeCompletionCache.getInstance().get(prompt);
+    }
+
+    private @NotNull CompleteResponse requestComplete(CompletePrompt prompt, AutoTypeSetting.State settingState) {
         CompleteRequest completeRequest = getCompleteRequest(prompt, settingState);
         CompleteResponse completeResponse = requestComplete(completeRequest, settingState.ollamaApi);
-        completionCache.put(prompt, completeResponse);
+        AutoTypeCompletionCache.getInstance().put(prompt, completeResponse);
         return completeResponse;
     }
 
@@ -159,8 +166,11 @@ public class AutoTypeCompletionServiceImpl implements AutoTypeCompletionService 
             case BLOCK -> {
                 List<String> completions = completeResponse.getCompletions();
                 //first line
-                SingleLineEditorCustomElementRenderer firstLineRenderer = new SingleLineEditorCustomElementRenderer(completions.get(0));
-                inlays.add(inlayModel.addInlineElement(offset, true, firstLineRenderer));
+                String firstCompletion = completions.get(0);
+                if (!StringUtils.isBlank(firstCompletion)) {
+                    SingleLineEditorCustomElementRenderer firstLineRenderer = new SingleLineEditorCustomElementRenderer(firstCompletion);
+                    inlays.add(inlayModel.addInlineElement(offset, true, firstLineRenderer));
+                }
 
                 //remain lines
                 MultiLineEditorCustomElementRenderer renderer = new MultiLineEditorCustomElementRenderer(completions.subList(1, completions.size()));

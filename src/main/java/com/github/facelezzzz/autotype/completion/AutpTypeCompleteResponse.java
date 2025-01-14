@@ -14,7 +14,7 @@ public class AutpTypeCompleteResponse implements CompleteResponse {
 
     public static AutpTypeCompleteResponse build(String content) {
         AutpTypeCompleteResponse response = new AutpTypeCompleteResponse();
-        List<String> completions = Splitter.on("\n").omitEmptyStrings().splitToList(content);
+        List<String> completions = Splitter.on("\n").splitToList(content);
         response.completions = completions;
         response.completeType = completions.size() > 1 ?
                 CompleteResponse.CompleteType.BLOCK : CompleteResponse.CompleteType.LINE;
